@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter/services.dart';
 import 'dart:io';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 
 class CameraPage extends StatefulWidget {
   const CameraPage({Key? key}) : super(key: key);
@@ -27,9 +27,6 @@ class _CameraPageState extends State<CameraPage> {
           "$galleryPath/${DateTime.now().millisecondsSinceEpoch}.jpg";
       final savedImage = await file.copy(savedImagePath);
       await savedImage.writeAsBytes(await file.readAsBytes());
-      const channel = MethodChannel('plugins.flutter.io/gallery_saver');
-      channel.invokeMethod(
-          'saveImage', {"fileByte": await savedImage.readAsBytes()});
 
       setState(() {
         imagePath = savedImagePath;
@@ -129,12 +126,25 @@ class _CameraPageState extends State<CameraPage> {
     } else {}
   }
 
+  void saveImageToGallery() async {
+    if (imagePath != null) {
+      final file = File(imagePath!);
+      final result = await ImageGallerySaver.saveFile(file.path);
+      print('Image saved to gallery: $result');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Image saved to gallery'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } else {
+      throw 'No image selected';
+    }
+  }
+
   void sendImageToWhatsApp() async {
     if (imagePath != null) {
-      // Get the file from the imagePath
       final file = File(imagePath!);
-
-      // Share the image and text on WhatsApp
       await Share.shareFiles([file.path], text: '');
     } else {
       throw 'No image selected';
@@ -193,7 +203,9 @@ class _CameraPageState extends State<CameraPage> {
               onPressed: () {
                 showImageSourceSelection();
               },
-              child: const Center(child: Text('Capture')),
+              child: const Center(
+                child: Text('Capture'),
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -210,7 +222,9 @@ class _CameraPageState extends State<CameraPage> {
               onPressed: () {
                 sendImageToWhatsApp();
               },
-              child: const Center(child: Text('Sent to WhatsApp')),
+              child: const Center(
+                child: Text('Sent to WhatsApp'),
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -225,7 +239,7 @@ class _CameraPageState extends State<CameraPage> {
             ),
             child: TextButton(
               onPressed: () {
-                pickImageFromGallery();
+                saveImageToGallery();
               },
               child: const Center(
                 child: Text('Save to Gallery'),
