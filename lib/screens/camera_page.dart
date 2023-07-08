@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:image_gallery_saver/image_gallery_saver.dart';
 
@@ -13,23 +13,61 @@ class CameraPage extends StatefulWidget {
 }
 
 class _CameraPageState extends State<CameraPage> {
-  String? imagePath = 'No image selected';
+  File? imagePath;
+  CroppedFile? _croppedFile;
 
-  Future<void> openCamera() async {
-    final image = await ImagePicker().pickImage(source: ImageSource.camera);
+  Future<File?> _cropImage({required File imagefile}) async {
+    if (imagePath != null) {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imagefile.path,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 100,
+        uiSettings: [
+          AndroidUiSettings(
+              toolbarTitle: 'Cropper',
+              toolbarColor: Colors.blue,
+              toolbarWidgetColor: Colors.white,
+              initAspectRatio: CropAspectRatioPreset.original,
+              lockAspectRatio: false),
+          IOSUiSettings(
+            title: 'Cropper',
+          ),
+          WebUiSettings(
+            context: context,
+            presentStyle: CropperPresentStyle.dialog,
+            boundary: const CroppieBoundary(
+              width: 520,
+              height: 520,
+            ),
+            viewPort:
+                const CroppieViewPort(width: 480, height: 480, type: 'circle'),
+            enableExif: true,
+            enableZoom: true,
+            showZoomer: true,
+          ),
+        ],
+      );
+      // if (croppedFile != null) {
+      return File(croppedFile!.path);
+      // setState(() {
+      //   _croppedFile = croppedFile;
+      // });
+      // }
+    }
+    return null;
+  }
+
+  Future<void> pickImage({required ImageSource imageSource}) async {
+    final image = await ImagePicker().pickImage(source: imageSource);
     if (image != null) {
       final file = File(image.path);
-
-      final directory = await getApplicationDocumentsDirectory();
-      final galleryPath = "${directory.path}/gallery";
-      await Directory(galleryPath).create(recursive: true);
-      final savedImagePath =
-          "$galleryPath/${DateTime.now().millisecondsSinceEpoch}.jpg";
-      final savedImage = await file.copy(savedImagePath);
-      await savedImage.writeAsBytes(await file.readAsBytes());
+      setState(() {
+        imagePath = file;
+      });
+      final img = await _cropImage(imagefile: file);
 
       setState(() {
-        imagePath = savedImagePath;
+        imagePath = img;
       });
     }
   }
@@ -57,8 +95,8 @@ class _CameraPageState extends State<CameraPage> {
                   child: SizedBox(
                     height: 50,
                     child: GestureDetector(
-                      onTap: () {
-                        pickImageFromGallery();
+                      onTap: () async {
+                        await pickImage(imageSource: ImageSource.gallery);
                         Navigator.pop(context);
                       },
                       child: const Row(
@@ -86,8 +124,8 @@ class _CameraPageState extends State<CameraPage> {
                   child: SizedBox(
                     height: 50,
                     child: GestureDetector(
-                      onTap: () {
-                        openCamera();
+                      onTap: () async {
+                        await pickImage(imageSource: ImageSource.camera);
                         Navigator.pop(context);
                       },
                       child: const Row(
@@ -113,23 +151,23 @@ class _CameraPageState extends State<CameraPage> {
     );
   }
 
-  Future<void> pickImageFromGallery() async {
-    final pickedImage =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
+  // Future<void> pickImageFromGallery() async {
+  //   final pickedImage =
+  //       await ImagePicker().pickImage(source: ImageSource.gallery);
 
-    if (pickedImage != null) {
-      final file = File(pickedImage.path);
+  //   if (pickedImage != null) {
+  //     final file = File(pickedImage.path);
 
-      setState(() {
-        imagePath = file.path;
-      });
-    } else {}
-  }
+  //     setState(() {
+  //       imagePath = file;
+  //     });
+  //   } else {}
+  // }
 
   void saveImageToGallery() async {
     if (imagePath != null) {
-      final file = File(imagePath!);
-      final result = await ImageGallerySaver.saveFile(file.path);
+      // final file = File(imagePath!);
+      final result = await ImageGallerySaver.saveFile(imagePath!.path);
       print('Image saved to gallery: $result');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -137,15 +175,12 @@ class _CameraPageState extends State<CameraPage> {
           duration: Duration(seconds: 3),
         ),
       );
-    } else {
-      throw 'No image selected';
     }
   }
 
   void sendImageToWhatsApp() async {
     if (imagePath != null) {
-      final file = File(imagePath!);
-      await Share.shareFiles([file.path], text: '');
+      await Share.shareFiles([imagePath!.path], text: '');
     } else {
       throw 'No image selected';
     }
@@ -181,7 +216,7 @@ class _CameraPageState extends State<CameraPage> {
               ),
               child: imagePath != null
                   ? Image.file(
-                      File(imagePath!),
+                      imagePath!,
                       fit: BoxFit.cover,
                     )
                   : const Center(
@@ -219,9 +254,11 @@ class _CameraPageState extends State<CameraPage> {
               ),
             ),
             child: TextButton(
-              onPressed: () {
-                sendImageToWhatsApp();
-              },
+              onPressed: imagePath != null
+                  ? () {
+                      sendImageToWhatsApp();
+                    }
+                  : null,
               child: const Center(
                 child: Text('Sent to WhatsApp'),
               ),
